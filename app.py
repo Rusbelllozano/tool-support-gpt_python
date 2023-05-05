@@ -33,20 +33,13 @@ app = App(token=slackBotToken)
 # app = AsyncApp(token=slackBotToken)
 
 
-secrets = {
-    'host': 'pg.pg4e.com',
-    'port': '5423',
-    'database': 'pg4e_6d166bf515',
-    'user': 'pg4e_6d166bf515',
-    'password': 'pg4e_p_089ff509dd93d1a'
-}
 
-conn_string = f"postgresql://{secrets['user']}:{secrets['password']}@{secrets['host']}/{secrets['database']}"
+conn_string = os.getenv("DB_URL")
 engine = sqla.create_engine(conn_string)
 
 
 # OpenAI enviroment variable key
-os.environ['OPENAI_API_KEY'] = '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'
+os.environ['OPENAI_API_KEY'] = os.getenv("OPENAI_API_KEY")
 
 # Langchain objects
 # -----------------
