@@ -28,18 +28,11 @@ load_dotenv()
 slackBotToken = os.getenv("SLACK_BOT_TOKEN")
 slackAppToken = os.getenv("SLACK_APP_TOKEN")
 
-# Install the Slack app and get xoxb- token in advance
 app = App(token=slackBotToken)
-# app = AsyncApp(token=slackBotToken)
-
-
 
 conn_string = os.getenv("DB_URL")
 engine = sqla.create_engine(conn_string)
 
-
-# OpenAI enviroment variable key
-os.environ['OPENAI_API_KEY'] = os.getenv("OPENAI_API_KEY")
 
 # Langchain objects
 # -----------------
@@ -61,15 +54,7 @@ agent_executor = create_sql_agent(
 
 @app.message("hello")
 def message_hello(client, message, say):
-    # say() sends a message to the channel where the event was triggered
-    # query = sqla.text("SELECT * FROM users LIMIT 5")
-    # list = pd.read_sql_query(query, engine.connect())
-    # df = pd.DataFrame(list)
-    # print(df)
     print('activado el entorno')
-
-    # client.chat_postMessage(channel='#tool-support', text="HELLO TEAM")
-
     say(
         blocks=[
             {
@@ -155,8 +140,3 @@ async def command(ack, body, respond):
 if __name__ == "__main__":
     SocketModeHandler(app, slackAppToken).start()
     app.start(3000)
-
-# if __name__ == "__main__":
-    # Create an app-level token with connections:write scope
-    # handler = SocketModeHandler(app, slackAppToken)
-    # handler.start()
