@@ -1,5 +1,7 @@
 # Base libraries
 # Langchain and OpenAI
+from flask import Flask
+
 from langchain.agents import AgentExecutor
 from langchain.chat_models import ChatOpenAI
 from langchain.llms.openai import OpenAI
@@ -14,16 +16,12 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 import pandas as pd
 import numpy as np
 import sqlalchemy as sqla
-# import re
-# import string
-# import hashlib
-# import datetime as dt
-# from dateutil.relativedelta import relativedelta
-
 
 # User libraries
 
 load_dotenv()
+
+appFlask = Flask(__name__)
 
 slackBotToken = os.getenv("SLACK_BOT_TOKEN")
 slackAppToken = os.getenv("SLACK_APP_TOKEN")
@@ -48,20 +46,20 @@ toolkit = SQLDatabaseToolkit(db=db, llm=llm, verbose=True)
 agent_executor = create_sql_agent(
     llm=OpenAI(temperature=0),
     toolkit=toolkit,
-    # verbose=True
 )
+
+cantData = ""
 
 
 @app.message("hello")
 def message_hello(client, message, say):
-    print('activado el entorno')
     say(
         blocks=[
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "Hola, estas son mis opciones principales :smile: *Tener en cuenta*, requiero tiempo despues de presionar un botón para responder"
+                    "text": "Hello, that are my principal options :smile:. *Please, be patient, i need time to think to give you a good answer*"
                 }
             },
             {
@@ -72,21 +70,24 @@ def message_hello(client, message, say):
                                     "type": "button",
                                     "text": {
                                         "type": "plain_text",
-                                        "text": "Describe the user table"
+                                        "text": "Number"
                                     },
                                     "style": "primary",
                                     "value": "click_me_1",
                                     "style": "primary",
-                                    "action_id": "button_click"
+                                    "action_id": "button_one_data"
                                 },
                                 {
                                     "type": "button",
                                     "text": {
                                         "type": "plain_text",
-                                        "text": "Enseñarme algo nuevo"
+                                        "text": "Table"
                                     },
-                                    "action_id": "button_learn_something"
-                                }
+                                    "style": "primary",
+                                    "value": "click_me_1",
+                                    "style": "primary",
+                                    "action_id": "button_multiple"
+                                },
                             ]
             }
         ],
@@ -94,49 +95,137 @@ def message_hello(client, message, say):
     )
 
 
-@app.action("button_learn_something")
+@app.action("button_one_data")
 def action_button_click(body, ack, say):
-    # Acknowledge the action
     ack()
-    response = agent_executor.run(
-        "Remember this: if a client try to create a new account but exist a same email in table users show a alert message, the user have to change the phone number or is trying to suplant")
-    print(response)
-    say(response)
+    global cantData
+    cantData = "0"
+    say("Perfect, i will remember that selection")
+    say("Now you can ask me something about Kiwi Financial INC")
 
 
-@app.action("button_click")
+@app.action("button_multiple")
 def action_button_click(body, ack, say):
-    # Acknowledge the action
     ack()
-    response = agent_executor.run("Describe the users table")
-    print(response)
-    say(response)
+    global cantData
+    cantData = "1"
+    say("Perfect, i will remember that selection")
+    say("Now you can ask me something about Kiwi Financial INC")
 
 
-@app.event("app_mention")
-def event_test(body, say, logger):
-    logger.info(body)
-    say("What's up?")
+# @app.event("app_mention")
+# def event_test(ack, body, say, logger):
+#     ack()
+#     logger.info(body)
+#     say(f'Your question is: {body["event"]["text"]}')
+#     say("Wait a moment, i'm thinking...")
+#     gpt_response = agent_executor.run(body["event"]["text"])
+#     # <@{body["event"]["user_id"]}>,
+#     say(f'your answer is: {gpt_response}')
 
 
-@app.command("/echo")
-def repeat_text(ack, body, respond, command):
-    # Acknowledge command request
-    ack()
-    respond(f"<@{body['user_id']}>{command['text'] }")
+# @app.command("/train_me")
+# def repeat_text(ack, body, respond):
+#     ack()
+#     respond("Wait a moment, i'm thinking...")
+#     gpt_response = agent_executor.run(f"{body['text']}")
+#     respond(f"<@{body['user_id']}>, your answer is: {gpt_response}")
 
 
 @app.event("message")
-def handle_message_events(body, logger):
-    print(body[event][text])
+def handle_message_events(ack, client, body, say, logger):
+    ack()
     logger.info(body)
 
+    event = body["event"]
+    thread_ts = event.get("thread_ts", None) or event["ts"]
 
-@app.command("/hello-bolt-python")
-async def command(ack, body, respond):
-    await ack()
-    await respond(f"Hi tessst <@{body['user_id']}>!")
+    global cantData
+
+    if cantData == "":
+        say("To intiate chat with AthenaSQL please type 'hello'")
+        return
+
+    say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f'Your question is: *{body["event"]["text"]}*'
+                }
+            }],
+        thread_ts=thread_ts,
+        text=f"Hey there!"
+    )
+
+    # responseUploadImg = app.client.files_upload(
+    #       filename='test',
+    #       filetype="png",
+    #       title='Sample Report',
+    #       alt_txt='test image',
+    #       file='test.png'
+    
+    # )
+    # print(responseUploadImg)
+    # print(responseUploadImg.get("file").get("permalink"))
+    
+    say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": 'Wait a moment, i´m thinking :hourglass:'
+                }
+            },
+            #  {
+            #     "type": "image",
+            #     "block_id": "b++",
+            #     "image_url": responseUploadImg.get("file").get("permalink"),
+            #     "alt_text": "image"
+            # },
+            ],
+        thread_ts=thread_ts,
+        text=f"Hey there!"
+    )
+
+    gpt_response = ""
+
+    if cantData == "1":
+        newText = f'{body["event"]["text"]}, Return only the query, it should be inside parentheses, following this format: (query).'
+        try:
+            gpt_response = agent_executor.run(newText)
+        except Exception as e:
+            say("Error in process")
+            print(e)
+        cantData = ""
+    else:
+        try:
+            gpt_response = agent_executor.run({body["event"]["text"]})
+        except Exception as e:
+            say("Error in process")
+            print(e)
+        cantData = ""
+
+    
+    # say(text="Hello", ) 
+
+    say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f'Your answer is: *{gpt_response}*'
+                }
+            }],
+        thread_ts=thread_ts,
+        text=f"Hey there!"
+    )
+
 
 if __name__ == "__main__":
     SocketModeHandler(app, slackAppToken).start()
+    appFlask.run(debug=True)
     app.start(3000)
