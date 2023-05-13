@@ -1,36 +1,56 @@
-# Base libraries
-# Langchain and OpenAI
-from flask import Flask
+#-------------------------------------------------------------------------------
+# LIBRARIES
+#-------------------------------------------------------------------------------
 
-from langchain.agents import AgentExecutor
+# Base libraries
+import re
+import os
+
+# Langchain and OpenAI
 from langchain.chat_models import ChatOpenAI
 from langchain.llms.openai import OpenAI
 from langchain.sql_database import SQLDatabase
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.agents import create_sql_agent
-import os
-from dotenv import load_dotenv
+
+
+# Slack libraries
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+
+# Flask
+from flask import Flask
+
 # Data libraries
+
 import pandas as pd
-import numpy as np
+import dataframe_image as dfi
 import sqlalchemy as sqla
 
-# User libraries
-
+# Environment variables library
+from dotenv import load_dotenv
 load_dotenv()
 
-appFlask = Flask(__name__)
+#-------------------------------------------------------------------------------
+# Global Variables
+# ------------------------------------------------------------------------------
 
+# Enviroment Variables
 slackBotToken = os.getenv("SLACK_BOT_TOKEN")
 slackAppToken = os.getenv("SLACK_APP_TOKEN")
 
+# App
+appFlask = Flask(__name__)
 app = App(token=slackBotToken)
 
+# SQL Connection
 conn_string = os.getenv("DB_URL")
 engine = sqla.create_engine(conn_string)
 
+# Utility variables
+REGEX_PATTERN = '\((.+)\)'
+CHANNEL_ID = 'D0561LW6E68'
+IMAGE_PATH = './gpt-output.csv'
 
 # Langchain objects
 # -----------------
@@ -50,16 +70,19 @@ agent_executor = create_sql_agent(
 
 cantData = ""
 
-
-@app.message("hello")
+#-------------------------------------------------------------------------------
+# SLACK FUNCTIONALITY
+#-------------------------------------------------------------------------------
+@app.message("Hello")
 def message_hello(client, message, say):
+    user = message['user']
     say(
         blocks=[
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "Hello, that are my principal options :smile:. *Please, be patient, i need time to think to give you a good answer*"
+                    "text": f"<@{user}> welcome to AthenaSQL :smile:, \nplease select which type of inquiry you want to make:"
                 }
             },
             {
@@ -100,8 +123,8 @@ def action_button_click(body, ack, say):
     ack()
     global cantData
     cantData = "0"
-    say("Perfect, i will remember that selection")
-    say("Now you can ask me something about Kiwi Financial INC")
+    say("Perfect, you want a specific data point. I will remember that selection")
+    say("You can ask me something about Kiwi Financial INC")
 
 
 @app.action("button_multiple")
@@ -109,8 +132,8 @@ def action_button_click(body, ack, say):
     ack()
     global cantData
     cantData = "1"
-    say("Perfect, i will remember that selection")
-    say("Now you can ask me something about Kiwi Financial INC")
+    say("Perfect, you want a table output. I will remember that selection")
+    say("You can ask me something about Kiwi Financial INC")
 
 
 # @app.event("app_mention")
@@ -136,28 +159,26 @@ def action_button_click(body, ack, say):
 def handle_message_events(ack, client, body, say, logger):
     ack()
     logger.info(body)
-
     event = body["event"]
     thread_ts = event.get("thread_ts", None) or event["ts"]
 
     global cantData
 
     if cantData == "":
-        say("To intiate chat with AthenaSQL please type 'hello'")
+        say(f"Hi! To intiate chat with me please type 'Hello'")
         return
 
-    say(
-        blocks=[
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f'Your question is: *{body["event"]["text"]}*'
-                }
-            }],
-        thread_ts=thread_ts,
-        text=f"Hey there!"
-    )
+    # say(
+    #     blocks=[
+    #         {
+    #             "type": "section",
+    #             "text": {
+    #                 "type": "mrkdwn",
+    #                 "text": f'Your question is: *{body["event"]["text"]}*'
+    #             }
+    #         }],
+    #     thread_ts=thread_ts
+    # )
 
     # responseUploadImg = app.client.files_upload(
     #       filename='test',
@@ -176,7 +197,7 @@ def handle_message_events(ack, client, body, say, logger):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": 'Wait a moment, i´m thinking :hourglass:'
+                    "text": 'Wait a moment, I am thinking :hourglass:'
                 }
             },
             #  {
@@ -186,16 +207,26 @@ def handle_message_events(ack, client, body, say, logger):
             #     "alt_text": "image"
             # },
             ],
-        thread_ts=thread_ts,
-        text=f"Hey there!"
+        thread_ts=thread_ts
     )
 
     gpt_response = ""
 
     if cantData == "1":
-        newText = f'{body["event"]["text"]}, Return only the query, it should be inside parentheses, following this format: (query).'
+        newText = (
+            f'{body["event"]["text"]}. The answer must be the query used to answer this question without limit, it should be inside parentheses, following this format: (query).' 
+        )
         try:
             gpt_response = agent_executor.run(newText)
+            query = re.findall(REGEX_PATTERN, gpt_response)[0]
+            df = pd.read_sql_query(query, engine)
+            df.to_csv(IMAGE_PATH, index=False)
+            gpt_response = df.to_markdown(index=False)
+            result = client.files_upload(
+                channels = CHANNEL_ID,
+                initial_comment = 'CSV table result',
+                file = IMAGE_PATH
+            )
         except Exception as e:
             say("Error in process")
             print(e)
@@ -217,7 +248,7 @@ def handle_message_events(ack, client, body, say, logger):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f'Your answer is: *{gpt_response}*'
+                    "text": f'{gpt_response}'
                 }
             }],
         thread_ts=thread_ts,
